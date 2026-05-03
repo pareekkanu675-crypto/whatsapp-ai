@@ -281,13 +281,14 @@ function AI(userId, message, businessId) {
   `✨ Mast choice!\n\n💇 ${service} select ho gaya\n\n👉 Book likho`
 );
   }
+  
+// 🔥 FINAL STRONG BOOK FIX (PLACE ABOVE PRICE & OTHER LOGIC)
 
-// 🔥 FINAL STRONG BOOK FIX
+const cleanText = text.toLowerCase();
+
 if (
   session.service &&
-  ["book", "booking", "confirm", "kar", "karna"].some(word =>
-    text.includes(word)
-  )
+  /(book|booking|confirm|kar|karna)/i.test(cleanText)
 ) {
   session.step = "slot";
 
@@ -298,13 +299,12 @@ if (
     `✨ Awesome choice!\n\n💇 Service: ${session.service}\n\n📅 Let’s schedule your appointment\n\n⏰ Available slots:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Reply with your preferred time (e.g. 10:00)`,
 
     // HINDI
-    `✨ Badhiya!\n\n💇 Service: ${session.service}\n\n📅 Appointment book karte hain\n\n⏰ Available slots:\n${client.availableSlots.join("\n")}\n\n👉 Time reply karein`,
+    `✨ Badhiya choice!\n\n💇 Service: ${session.service}\n\n📅 Appointment book karte hain\n\n⏰ Available slots:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Apna time select karo`,
 
-    // HINGLISH (PREMIUM)
-    `✨ Perfect choice!\n\n💇 Service: ${session.service}\n\n📅 Appointment fix karte hain\n\n⏰ Available slots:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Apna time select karo (jaise 10:00)`
+    // HINGLISH
+    `✨ Perfect choice!\n\n💇 Service: ${session.service}\n\n📅 Appointment fix karte hain\n\n⏰ Available slots:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Apna time select karo`
   );
 }
-  
   // SLOT FIX
   const slot = client.availableSlots.find(s =>
     text.includes(s) ||

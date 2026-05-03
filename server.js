@@ -224,29 +224,30 @@ function AI(userId, message, businessId) {
   const text = normalize(message);
 
   // LANGUAGE
-  if (session.step === "language") {
-    if (!session.lang) {
-      return "🌐 Choose language:\n1. English\n2. हिंदी\n3. Hinglish";
-    }
+ if (session.step === "language") {
 
-    if (text.includes("1") || text.includes("english")) {
-      session.lang = "en";
-      session.step = "start";
-      return `✨ Welcome to ${client.name}`;
-    }
-
-    if (text.includes("2")) {
-      session.lang = "hi";
-      session.step = "start";
-      return `✨ ${client.name} mein swagat hai`;
-    }
-
-    if (text.includes("3")) {
-      session.lang = "hinglish";
-      session.step = "start";
-      return `✨ Welcome to ${client.name}`;
-    }
+  // USER SELECTS LANGUAGE FIRST
+  if (text.includes("1") || text.includes("english")) {
+    session.lang = "en";
+    session.step = "start";
+    return `✨ Welcome to ${client.name}\n👉 Type Price or Book`;
   }
+
+  if (text.includes("2") || text.includes("hindi") || text.includes("हिंदी")) {
+    session.lang = "hi";
+    session.step = "start";
+    return `✨ ${client.name} में स्वागत है\n👉 Price या Book लिखें`;
+  }
+
+  if (text.includes("3") || text.includes("hinglish")) {
+    session.lang = "hinglish";
+    session.step = "start";
+    return `✨ Welcome to ${client.name}\n👉 Price ya Book likho`;
+  }
+
+  // ONLY IF USER HAS NOT SELECTED YET
+  return "🌐 Choose language:\n1. English\n2. हिंदी\n3. Hinglish";
+}
 
   // GREETING
   if (/(hi|hello|hey|namaste)/.test(text)) {

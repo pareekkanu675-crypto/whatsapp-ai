@@ -163,14 +163,6 @@ function normalize(msg) {
   return msg.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 }
 
-function detectIntent(msg) {
-  const t = normalize(msg);
-  if (/(hi|hello|hey|namaste)/.test(t)) return "greeting";
-  if (/(price|kitna|rate|cost)/.test(t)) return "price";
-  if (/(book|booking|karna|slot)/.test(t)) return "booking";
-  return "unknown";
-}
-
 function detectService(msg) {
   const t = normalize(msg);
   const map = {
@@ -196,6 +188,13 @@ function detectDate(msg) {
   return today.toISOString().split("T")[0];
 }
 
+// 🔥 NEW: Language helper
+function reply(session, en, hi, hinglish) {
+  if (session.lang === "hi") return hi;
+  if (session.lang === "hinglish") return hinglish;
+  return en;
+}
+
 // ================= QR =================
 async function generateQRImage(upi, name, amount, service) {
   const link = `upi://pay?pa=${upi}&pn=${name}&am=${amount}&tn=${service}&cu=INR`;
@@ -211,39 +210,97 @@ async function generateQRImage(upi, name, amount, service) {
 // ================= AI =================
 function AI(userId, message, businessId) {
   const client = clients[businessId];
-  const intent = detectIntent(message);
   const service = detectService(message);
 
-  if (!memory[userId]) memory[userId] = { step: "start", service: null };
+  if (!memory[userId]) {
+    memory[userId] = {
+      step: "language",
+      lang: null,
+      service: null
+    };
+  }
 
   const session = memory[userId];
+  const text = normalize(message);
 
-  if (!leads[businessId]) leads[businessId] = [];
-  if (!leads[businessId].find(l => l.phone === userId)) {
-    leads[businessId].push({ phone: userId });
+  // LANGUAGE
+  if (session.step === "language") {
+    if (!session.lang) {
+      return "🌐 Choose language:\n1. English\n2. हिंदी\n3. Hinglish";
+    }
+
+    if (text.includes("1") || text.includes("english")) {
+      session.lang = "en";
+      session.step = "start";
+      return `✨ Welcome to ${client.name}`;
+    }
+
+    if (text.includes("2")) {
+      session.lang = "hi";
+      session.step = "start";
+      return `✨ ${client.name} mein swagat hai`;
+    }
+
+    if (text.includes("3")) {
+      session.lang = "hinglish";
+      session.step = "start";
+      return `✨ Welcome to ${client.name}`;
+    }
   }
 
-  if (intent === "greeting") return `Hey 👋 Welcome to ${client.name}`;
-
-  if (intent === "price") {
-    return Object.entries(client.services)
-      .map(([s, p]) => `${s}: ₹${p}`)
-      .join("\n");
+  // GREETING
+  if (/(hi|hello|hey|namaste)/.test(text)) {
+    return reply(
+      session,
+      `✨ Welcome to ${client.name}\n👉 Type Price or Book`,
+      `✨ Swagat hai\n👉 Price ya Book likhein`,
+      `✨ Welcome\n👉 Price ya Book likho`
+    );
   }
 
+  // PRICE
+  if (/(price|rate|cost|kitna)/.test(text)) {
+    return reply(
+      session,
+      `💇 Haircut ₹${client.services.haircut}\n🧖 Facial ₹${client.services.facial}\n🧔 Beard ₹${client.services.beard}`,
+      `💇 Haircut ₹${client.services.haircut}\n🧖 Facial ₹${client.services.facial}\n🧔 Beard ₹${client.services.beard}`,
+      `💇 Haircut ₹${client.services.haircut}\n🧖 Facial ₹${client.services.facial}\n🧔 Beard ₹${client.services.beard}`
+    );
+  }
+
+  // SERVICE
   if (service) {
     session.service = service;
     session.step = "confirm";
-    return `${service} selected 👍`;
+
+    return reply(
+      session,
+      `✨ Great choice!\n💇 ${service} selected\n👉 Type Book`,
+      `✨ Badhiya!\n💇 ${service} select\n👉 Book likhein`,
+      `✨ Mast!\n💇 ${service} select\n👉 Book likho`
+    );
   }
 
-  if (session.service && session.step === "confirm") {
+  // BOOK FIX
+  if (
+    session.service &&
+    /(book|booking|karna|confirm)/.test(text)
+  ) {
     session.step = "slot";
-    return `Slots:\n${client.availableSlots.join(" | ")}`;
+
+    return reply(
+      session,
+      `⏰ Available slots:\n${client.availableSlots.join("\n")}`,
+      `⏰ Time slots:\n${client.availableSlots.join("\n")}`,
+      `⏰ Slots:\n${client.availableSlots.join("\n")}`
+    );
   }
 
+  // SLOT FIX
   const slot = client.availableSlots.find(s =>
-    normalize(message).includes(s.replace(":", ""))
+    text.includes(s) ||
+    text.includes(s.replace(":", "")) ||
+    text.includes(s.replace(":00", ""))
   );
 
   if (session.step === "slot" && slot) {
@@ -257,17 +314,14 @@ function AI(userId, message, businessId) {
       businessId
     });
 
-    followups.push({
-      phone: userId,
-      businessId,
-      time: Date.now() + 3600000,
-      type: "r1",
-      sent: false
-    });
-
     session.awaitingPayment = true;
 
-    return `Booked ✅\nTime: ${slot}\nDate: ${date}\nType pay`;
+    return reply(
+      session,
+      `✅ Booking Confirmed\n📅 ${date}\n⏰ ${slot}\nType Pay`,
+      `✅ Booking ho gaya\n📅 ${date}\n⏰ ${slot}\nPay likhein`,
+      `✅ Booking ho gaya\n📅 ${date}\n⏰ ${slot}\nPay likho`
+    );
   }
 
   return "Try: price, haircut, book";
@@ -324,14 +378,14 @@ app.post("/webhook", async (req, res) => {
 
     const client = clients[businessId];
 
-    const reply = AI(from, text, businessId);
+    const replyMsg = AI(from, text, businessId);
 
     await axios.post(
       `https://graph.facebook.com/v18.0/${phoneId}/messages`,
       {
         messaging_product: "whatsapp",
         to: from,
-        text: { body: reply }
+        text: { body: replyMsg }
       },
       {
         headers: {

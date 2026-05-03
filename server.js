@@ -288,23 +288,28 @@ const t = normalize(message);
 
 if (
   session.service &&
-  /(book|booking|confirm|kar|karna)/i.test(cleanText)
+  session.step === "confirm" &&
+  (
+    t.includes("book") ||
+    t.includes("booking") ||
+    t.includes("confirm") ||
+    t.includes("kar") ||
+    t.includes("karna")
+  )
 ) {
   session.step = "slot";
 
   return reply(
     session,
 
-    // ENGLISH (PREMIUM)
-    `✨ Awesome choice!\n\n💇 Service: ${session.service}\n\n📅 Let’s schedule your appointment\n\n⏰ Available slots:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Reply with your preferred time (e.g. 10:00)`,
+    `✨ Awesome choice!\n\n💇 Service: ${session.service}\n\n📅 Select your slot:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Reply with time`,
 
-    // HINDI
-    `✨ Badhiya choice!\n\n💇 Service: ${session.service}\n\n📅 Appointment book karte hain\n\n⏰ Available slots:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Apna time select karo`,
+    `✨ Badhiya!\n\n💇 Service: ${session.service}\n\n📅 Slot select karo:\n${client.availableSlots.map(s => "• " + s).join("\n")}`,
 
-    // HINGLISH
-    `✨ Perfect choice!\n\n💇 Service: ${session.service}\n\n📅 Appointment fix karte hain\n\n⏰ Available slots:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Apna time select karo`
+    `✨ Perfect!\n\n💇 Service: ${session.service}\n\n📅 Slot choose karo:\n${client.availableSlots.map(s => "• " + s).join("\n")}`
   );
 }
+  
   // SLOT FIX
   const slot = client.availableSlots.find(s =>
     text.includes(s) ||

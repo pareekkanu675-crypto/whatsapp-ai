@@ -2,9 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
 const fs = require("fs");
-const Razorpay = require("razorpay");
-const crypto = require("crypto");
 const cors = require("cors");
+const QRCode = require("qrcode");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
@@ -15,29 +14,7 @@ app.use(cors({ origin: "*" }));
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
-// ================= SAFE RAZORPAY =================
-let razorpay = null;
-if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
-  razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET
-  });
-  console.log("✅ Razorpay Ready");
-} else {
-  console.log("⚠️ Razorpay not configured");
-}
-
 // ================= DATABASE =================
-const DB = {
-  users: "users.json",
-  clients: "clients.json",
-  leads: "leads.json",
-  bookings: "bookings.json",
-  memory: "memory.json",
-  revenue: "revenue.json",
-  followups: "followups.json"
-};
-
 function load(file, fallback) {
   try {
     return fs.existsSync(file)
@@ -48,55 +25,47 @@ function load(file, fallback) {
   }
 }
 
-let users = load(DB.users, {});
-let clients = load(DB.clients, {});
-let leads = load(DB.leads, {});
-let bookings = load(DB.bookings, []);
-let memory = load(DB.memory, {});
-let revenue = load(DB.revenue, []);
-let followups = load(DB.followups, []);
+let users = load("users.json", {});
+let clients = load("clients.json", {});
+let leads = load("leads.json", {});
+let bookings = load("bookings.json", []);
+let memory = load("memory.json", {});
+let revenue = load("revenue.json", []);
+let followups = load("followups.json", []);
 
 function saveAll() {
-  fs.writeFileSync(DB.users, JSON.stringify(users, null, 2));
-  fs.writeFileSync(DB.clients, JSON.stringify(clients, null, 2));
-  fs.writeFileSync(DB.leads, JSON.stringify(leads, null, 2));
-  fs.writeFileSync(DB.bookings, JSON.stringify(bookings, null, 2));
-  fs.writeFileSync(DB.memory, JSON.stringify(memory, null, 2));
-  fs.writeFileSync(DB.revenue, JSON.stringify(revenue, null, 2));
-  fs.writeFileSync(DB.followups, JSON.stringify(followups, null, 2));
+  fs.writeFileSync("users.json", JSON.stringify(users, null, 2));
+  fs.writeFileSync("clients.json", JSON.stringify(clients, null, 2));
+  fs.writeFileSync("leads.json", JSON.stringify(leads, null, 2));
+  fs.writeFileSync("bookings.json", JSON.stringify(bookings, null, 2));
+  fs.writeFileSync("memory.json", JSON.stringify(memory, null, 2));
+  fs.writeFileSync("revenue.json", JSON.stringify(revenue, null, 2));
+  fs.writeFileSync("followups.json", JSON.stringify(followups, null, 2));
 }
 
 // ================= BASIC ROUTES =================
-app.get("/", (req, res) => res.send("🚀 AI SaaS Running"));
-
-app.get("/privacy", (req, res) =>
-  res.send("Privacy Policy: We store messages for booking automation.")
-);
-
-app.get("/terms", (req, res) =>
-  res.send("Terms: Usage implies consent to automation.")
-);
-
-app.post("/delete", (req, res) =>
-  res.send({ success: true, message: "Deletion requested" })
-);
+app.get("/", (req, res) => res.send("🚀 SaaS Running"));
+app.get("/privacy", (req, res) => res.send("Privacy Policy"));
+app.get("/terms", (req, res) => res.send("Terms"));
+app.post("/delete", (req, res) => res.send({ success: true }));
 
 // ================= AUTH =================
 app.post("/api/register", async (req, res) => {
-  const { email, password, businessName, phoneId } = req.body;
+  const { email, password, businessName, upi } = req.body;
 
   if (users[email]) return res.send({ error: "User exists" });
 
   const hash = await bcrypt.hash(password, 10);
 
-  users[email] = { password: hash, plan: "free", expiresAt: null };
+  users[email] = { password: hash, plan: "free" };
 
   clients[email] = {
-    name: businessName || "Salon",
+    name: businessName,
+    upi: upi,
     services: { haircut: 300, facial: 800, beard: 200 },
     timings: "10 AM - 8 PM",
     availableSlots: ["10:00", "12:00", "14:00", "16:00"],
-    phone_number_id: phoneId || process.env.PHONE_NUMBER_ID
+    phone_number_id: process.env.PHONE_NUMBER_ID
   };
 
   saveAll();
@@ -136,64 +105,97 @@ app.get("/api/client-data", auth, (req, res) => {
   res.send({
     leads: (leads[email] || []).length,
     bookings: userBookings.length,
-    revenue: userRevenue.reduce((s, r) => s + r.amount, 0),
-    plan: users[email]?.plan
+    revenue: userRevenue.reduce((s, r) => s + r.amount, 0)
   });
 });
 
-// ================= AI ENGINE =================
-function clean(msg) {
-  return msg.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+// 🔥 NEW ADMIN API (ADDED)
+app.get("/api/all-bookings", (req, res) => {
+  res.send(bookings);
+});
+
+// ================= SMART ENGINE =================
+function normalize(msg) {
+  return msg.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 }
 
-function detectService(msg, services) {
-  return Object.keys(services).find(s => msg.includes(s));
+function detectIntent(msg) {
+  const text = normalize(msg);
+
+  if (/hi|hello|hey|namaste|bhai/.test(text)) return "greeting";
+  if (/price|pricing|cost|kitna|daam|rate|charges/.test(text)) return "price";
+  if (/book|booking|appointment|karna|slot/.test(text)) return "booking";
+  if (/time|timing|kab|open|close/.test(text)) return "time";
+
+  return "unknown";
 }
 
+function detectService(msg) {
+  const text = normalize(msg);
+
+  const map = {
+    haircut: ["haircut", "cut", "baal", "hair"],
+    beard: ["beard", "daadhi", "shave"],
+    facial: ["facial", "face", "skin"]
+  };
+
+  for (let s in map) {
+    if (map[s].some(w => text.includes(w))) return s;
+  }
+
+  return null;
+}
+
+// 🔥 BETTER SLOT DETECTION (NEW)
 function detectSlot(msg, slots) {
   return slots.find(s => msg.includes(s));
 }
 
+// ================= BOT =================
 function AI(userId, message, businessId) {
   const client = clients[businessId];
-  const msg = clean(message);
+  const intent = detectIntent(message);
+  const service = detectService(message);
 
   if (!memory[userId]) {
-    memory[userId] = { service: null, waiting: false };
+    memory[userId] = { step: "start", service: null };
   }
 
   const session = memory[userId];
 
+  // Lead tracking
   if (!leads[businessId]) leads[businessId] = [];
   if (!leads[businessId].find(l => l.phone === userId)) {
     leads[businessId].push({ phone: userId });
   }
 
-  if (/hi|hello|hey/.test(msg)) {
-    return `Hey 👋 Welcome to ${client.name}! Ask for pricing or booking 😊`;
+  if (intent === "greeting") {
+    return `Hey 👋 Welcome to ${client.name}!
+
+Ask for price or booking 😊`;
   }
 
-  if (/price|cost|rate|kitna/.test(msg)) {
+  if (intent === "price") {
     return Object.entries(client.services)
       .map(([s, p]) => `${s}: ₹${p}`)
       .join("\n");
   }
 
-  if (/time|open/.test(msg)) {
-    return `🕒 ${client.timings}`;
-  }
-
-  const service = detectService(msg, client.services);
-
   if (service) {
     session.service = service;
-    session.waiting = true;
-    return `${service} selected 👍\nSlots:\n${client.availableSlots.join(" | ")}`;
+    return `${service} selected 👍\nReply "book"`;
   }
 
-  const slot = detectSlot(msg, client.availableSlots);
+  if (intent === "booking") {
+    if (!session.service) return "Choose service first";
 
-  if (session.waiting && slot) {
+    session.step = "slot";
+    return `Slots:\n${client.availableSlots.join(" | ")}`;
+  }
+
+  const slot = detectSlot(message, client.availableSlots);
+
+  if (session.step === "slot" && slot) {
     bookings.push({
       phone: userId,
       service: session.service,
@@ -213,25 +215,22 @@ function AI(userId, message, businessId) {
       sent: false
     });
 
-    session.waiting = false;
+    session.step = "done";
 
-    return `✅ Booked at ${slot}`;
+    return `Booked ✅ at ${slot}
+
+Type "pay"`;
   }
 
-  return "Say price, service or booking 😊";
+  return "Say price or book 😊";
 }
 
-// ================= PAYMENT =================
-app.post("/api/create-order", async (req, res) => {
-  if (!razorpay) return res.send({ error: "Payment disabled" });
-
-  const order = await razorpay.orders.create({
-    amount: 49900,
-    currency: "INR"
-  });
-
-  res.send(order);
-});
+// ================= UPI QR =================
+async function generateQR(upi, name, amount) {
+  if (!upi) return null;
+  const link = `upi://pay?pa=${upi}&pn=${name}&am=${amount}&cu=INR`;
+  return await QRCode.toDataURL(link);
+}
 
 // ================= FOLLOWUP =================
 setInterval(async () => {
@@ -244,7 +243,7 @@ setInterval(async () => {
         {
           messaging_product: "whatsapp",
           to: f.phone,
-          text: { body: "Hey 😊 Need help with your booking?" }
+          text: { body: "Hey 😊 Need help completing your booking?" }
         },
         {
           headers: {
@@ -258,7 +257,7 @@ setInterval(async () => {
   }
 }, 60000);
 
-// ================= WEBHOOK =================
+// ================= WEBHOOK VERIFY =================
 app.get("/webhook", (req, res) => {
   const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
@@ -269,6 +268,7 @@ app.get("/webhook", (req, res) => {
   res.sendStatus(403);
 });
 
+// ================= WEBHOOK =================
 app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 
@@ -287,7 +287,9 @@ app.post("/webhook", async (req, res) => {
     if (!businessId) return;
 
     const reply = AI(from, text, businessId);
+    const client = clients[businessId];
 
+    // SEND TEXT
     await axios.post(
       `https://graph.facebook.com/v18.0/${phoneId}/messages`,
       {
@@ -302,6 +304,56 @@ app.post("/webhook", async (req, res) => {
       }
     );
 
+    // 🔥 PAYMENT QR
+    if (text.toLowerCase() === "pay") {
+      const service = memory[from]?.service;
+      if (!service) return;
+
+      const amount = client.services[service];
+      const qr = await generateQR(client.upi, client.name, amount);
+
+      if (!qr) return;
+
+      await axios.post(
+        `https://graph.facebook.com/v18.0/${phoneId}/messages`,
+        {
+          messaging_product: "whatsapp",
+          to: from,
+          type: "image",
+          image: { link: qr, caption: `Pay ₹${amount}` }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`
+          }
+        }
+      );
+    }
+
+    // 🔥 PAYMENT PROOF (NEW)
+    if (msg.type === "image") {
+      bookings.push({
+        phone: from,
+        service: memory[from]?.service,
+        status: "payment_pending",
+        businessId
+      });
+
+      await axios.post(
+        `https://graph.facebook.com/v18.0/${phoneId}/messages`,
+        {
+          messaging_product: "whatsapp",
+          to: from,
+          text: { body: "Payment screenshot received ✅" }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`
+          }
+        }
+      );
+    }
+
     saveAll();
   } catch (e) {
     console.log("ERROR:", e.message);
@@ -309,4 +361,6 @@ app.post("/webhook", async (req, res) => {
 });
 
 // ================= START =================
-app.listen(PORT, () => console.log("🔥 SERVER RUNNING", PORT));
+app.listen(PORT, () => {
+  console.log("🔥 SERVER RUNNING", PORT);
+});

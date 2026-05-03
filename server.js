@@ -282,15 +282,12 @@ function AI(userId, message, businessId) {
 );
   }
 
-  // BOOK FIX
-// 🔥 BOOKING TRIGGER (STRONG FIX)
+// 🔥 FINAL STRONG BOOK FIX
 if (
   session.service &&
-  (text.includes("book") ||
-   text.includes("booking") ||
-   text.includes("confirm") ||
-   text.includes("kar") ||
-   text.includes("karna"))
+  ["book", "booking", "confirm", "kar", "karna"].some(word =>
+    text.includes(word)
+  )
 ) {
   session.step = "slot";
 
@@ -298,13 +295,13 @@ if (
     session,
 
     // ENGLISH (PREMIUM)
-    `✨ Awesome choice!\n\n📅 Let's book your *${session.service}*\n\n⏰ Available slots:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Reply with preferred time`,
+    `✨ Awesome choice!\n\n💇 Service: ${session.service}\n\n📅 Let’s schedule your appointment\n\n⏰ Available slots:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Reply with your preferred time (e.g. 10:00)`,
 
     // HINDI
-    `✨ Badhiya!\n\n📅 ${session.service} booking ke liye\n\n⏰ Available slots:\n${client.availableSlots.join("\n")}\n\n👉 Time reply karein`,
+    `✨ Badhiya!\n\n💇 Service: ${session.service}\n\n📅 Appointment book karte hain\n\n⏰ Available slots:\n${client.availableSlots.join("\n")}\n\n👉 Time reply karein`,
 
     // HINGLISH (PREMIUM)
-    `✨ Perfect choice!\n\n📅 ${session.service} book karte hain\n\n⏰ Available slots:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Apna time select karo`
+    `✨ Perfect choice!\n\n💇 Service: ${session.service}\n\n📅 Appointment fix karte hain\n\n⏰ Available slots:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Apna time select karo (jaise 10:00)`
   );
 }
   

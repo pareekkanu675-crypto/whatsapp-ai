@@ -270,20 +270,19 @@ function AI(userId, message, businessId) {
   }
 
   // SERVICE
-  if (service) {
-    session.service = service;
-    session.step = "confirm";
+ if (service && session.step !== "confirm") {
+  session.service = service;
+  session.step = "confirm";
 
-   return reply(
-  session,
-  `✨ Great choice!\n\n💇 ${service} selected\n\n👉 Type *Book* to continue`,
-  `✨ Badhiya choice!\n\n💇 ${service} select hua\n\n👉 Book likhein`,
-  `✨ Mast choice!\n\n💇 ${service} select ho gaya\n\n👉 Book likho`
-);
-  }
+  return reply(
+    session,
+    `✨ Great choice!\n\n💇 ${service} selected\n\n👉 Type *Book* to continue`,
+    `✨ Badhiya!\n\n💇 ${service} select hua\n\n👉 Book likho`,
+    `✨ Mast!\n\n💇 ${service} select ho gaya\n\n👉 Book likho`
+  );
+}
   
 // 🔥 FINAL STRONG BOOK FIX (PLACE ABOVE PRICE & OTHER LOGIC)
-
 const t = normalize(message);
 
 if (
@@ -293,20 +292,16 @@ if (
     t.includes("book") ||
     t.includes("booking") ||
     t.includes("confirm") ||
-    t.includes("kar") ||
-    t.includes("karna")
+    t.includes("kar")
   )
 ) {
   session.step = "slot";
 
   return reply(
     session,
-
-    `✨ Awesome choice!\n\n💇 Service: ${session.service}\n\n📅 Select your slot:\n${client.availableSlots.map(s => "• " + s).join("\n")}\n\n👉 Reply with time`,
-
-    `✨ Badhiya!\n\n💇 Service: ${session.service}\n\n📅 Slot select karo:\n${client.availableSlots.map(s => "• " + s).join("\n")}`,
-
-    `✨ Perfect!\n\n💇 Service: ${session.service}\n\n📅 Slot choose karo:\n${client.availableSlots.map(s => "• " + s).join("\n")}`
+    `✨ Awesome choice!\n\n💇 ${session.service}\n\n📅 Select slot:\n${client.availableSlots.join(" | ")}`,
+    `✨ Badhiya!\n\n💇 ${session.service}\n\n📅 Slot select karo`,
+    `✨ Perfect!\n\n💇 ${session.service}\n\n📅 Time choose karo`
   );
 }
   

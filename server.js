@@ -284,7 +284,7 @@ function AI(userId, message, businessId) {
   
 // 🔥 FINAL STRONG BOOK FIX (PLACE ABOVE PRICE & OTHER LOGIC)
 
-const cleanText = text.toLowerCase();
+const t = normalize(message);
 
 if (
   session.service &&

@@ -251,14 +251,17 @@ function AI(userId, message, businessId) {
 
   // GREETING
   if (/(hi|hello|hey|namaste)/.test(text)) {
-    return reply(
-      session,
-      `✨ Welcome to ${client.name}\n👉 Type Price or Book`,
-      `✨ Swagat hai\n👉 Price ya Book likhein`,
-      `✨ Welcome\n👉 Price ya Book likho`
-    );
-  }
+  return reply(
+    session,
 
+    `✨ Welcome to ${client.name}\n\n💼 Premium Salon Experience\n\n👉 Type *price* to see services\n👉 Type *book* to book appointment`,
+
+    `✨ ${client.name} mein swagat hai\n\n👉 *price* likho services ke liye\n👉 *book* likho booking ke liye`,
+
+    `✨ Welcome to ${client.name}\n\n👉 Price dekhne ke liye *price* likho\n👉 Booking ke liye *book* likho`
+  );
+}
+  
   // PRICE
   if (/(price|rate|cost|kitna)/.test(text)) {
     return reply(
@@ -282,26 +285,28 @@ function AI(userId, message, businessId) {
   );
 }
   
-// 🔥 FINAL STRONG BOOK FIX (PLACE ABOVE PRICE & OTHER LOGIC)
-const t = normalize(message);
+// 🔥 FINAL PREMIUM BOOK FLOW (KEEP ABOVE PRICE)
+
+const cleanText = text.toLowerCase();
+const slots = client.availableSlots || ["10:00","12:00","14:00","16:00"];
 
 if (
   session.service &&
-  session.step === "confirm" &&
-  (
-    t.includes("book") ||
-    t.includes("booking") ||
-    t.includes("confirm") ||
-    t.includes("kar")
-  )
+  /(book|booking|confirm|kar|karna)/i.test(cleanText)
 ) {
   session.step = "slot";
 
   return reply(
     session,
-    `✨ Awesome choice!\n\n💇 ${session.service}\n\n📅 Select slot:\n${client.availableSlots.join(" | ")}`,
-    `✨ Badhiya!\n\n💇 ${session.service}\n\n📅 Slot select karo`,
-    `✨ Perfect!\n\n💇 ${session.service}\n\n📅 Time choose karo`
+
+    // 🇬🇧 ENGLISH (PREMIUM)
+    `✨ Great choice!\n\n💇 Service: ${session.service}\n\n📅 Let’s book your appointment\n\n⏰ Available slots:\n${slots.map(s => "• " + s).join("\n")}\n\n👉 Reply with your preferred time (e.g. 10:00)`,
+
+    // 🇮🇳 HINDI
+    `✨ Badhiya choice!\n\n💇 Service: ${session.service}\n\n📅 Appointment book karte hain\n\n⏰ Available slots:\n${slots.map(s => "• " + s).join("\n")}\n\n👉 Apna time select karo`,
+
+    // 🔥 HINGLISH (PREMIUM)
+    `✨ Perfect choice!\n\n💇 Service: ${session.service}\n\n📅 Appointment fix karte hain\n\n⏰ Available slots:\n${slots.map(s => "• " + s).join("\n")}\n\n👉 Apna time select karo`
   );
 }
   
@@ -312,27 +317,35 @@ if (
     text.includes(s.replace(":00", ""))
   );
 
-  if (session.step === "slot" && slot) {
-    const date = detectDate(message);
+  // 🔥 PREMIUM SLOT CONFIRM
 
-    bookings.push({
-      phone: userId,
-      service: session.service,
-      time: slot,
-      date,
-      businessId
-    });
+if (session.step === "slot" && slot) {
+  const date = detectDate(message);
 
-    session.awaitingPayment = true;
+  bookings.push({
+    phone: userId,
+    service: session.service,
+    time: slot,
+    date,
+    businessId
+  });
 
-    return reply(
-      session,
-      `✅ Booking Confirmed\n📅 ${date}\n⏰ ${slot}\nType Pay`,
-      `✅ Booking ho gaya\n📅 ${date}\n⏰ ${slot}\nPay likhein`,
-      `✅ Booking ho gaya\n📅 ${date}\n⏰ ${slot}\nPay likho`
-    );
-  }
+  session.awaitingPayment = true;
 
+  return reply(
+    session,
+
+    // ENGLISH
+    `✅ Booking Confirmed!\n\n💇 Service: ${session.service}\n📅 Date: ${date}\n⏰ Time: ${slot}\n\n💳 Type *pay* to proceed with payment`,
+
+    // HINDI
+    `✅ Booking confirm ho gaya!\n\n💇 Service: ${session.service}\n📅 Date: ${date}\n⏰ Time: ${slot}\n\n💳 Payment ke liye *pay* likho`,
+
+    // HINGLISH
+    `✅ Booking done!\n\n💇 Service: ${session.service}\n📅 Date: ${date}\n⏰ Time: ${slot}\n\n💳 Payment ke liye *pay* likho`
+  );
+}
+ 
   return "Try: price, haircut, book";
 }
 

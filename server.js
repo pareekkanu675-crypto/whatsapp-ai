@@ -184,7 +184,7 @@ function isSmartLead(text) {
 
 // ================= AUTH =================
 app.post("/api/register", async (req, res) => {
-  const { email, password, businessName, upi } = req.body;
+  const { email, password, businessName, upi, ownerPhone } = req.body;
 
   const hash = await bcrypt.hash(password, 10);
 
@@ -194,6 +194,7 @@ app.post("/api/register", async (req, res) => {
 
   clients[email] = {
     name: businessName,
+    ownerPhone,
     upi,
     services: {
       haircut: 300,
@@ -336,7 +337,7 @@ async function notifyOwner(client, booking) {
       `https://graph.facebook.com/v18.0/${client.phone_number_id}/messages`,
       {
         messaging_product: "whatsapp",
-        to: process.env.OWNER_PHONE,
+        to: client.ownerPhone,
         text: {
           body:
             `📢 New Booking!\n\n` +

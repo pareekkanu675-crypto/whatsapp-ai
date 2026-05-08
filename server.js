@@ -760,7 +760,16 @@ function verifyWebhookSignature(req) {
   return `sha256=${hash}` === signature;
 }
 
-// ================= WEBHOOK =================
+// ================= WEBHOOK VERIFICATION =================
+app.get("/webhook", (req, res) => {
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+  
+  if (token === process.env.VERIFY_TOKEN) {
+    return res.send(challenge);
+  }
+  res.sendStatus(403);
+});
 app.post("/webhook", async (req, res) => {
   // Verify webhook signature
   if (!verifyWebhookSignature(req)) {
@@ -785,7 +794,10 @@ app.post("/webhook", async (req, res) => {
       key => clients[key].phone_number_id === phoneId
     );
 
-    if (!businessId) return;
+    if (!businessId) {
+  console.log("❌ No matching phone ID found. Phone ID:", phoneId);
+  return res.sendStatus(400);
+}
 
     const client = clients[businessId];
 

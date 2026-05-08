@@ -392,11 +392,71 @@ function AI(userId, message, businessId) {
       service: null,
       intent: "low",
       upsellOffered: false
+
+      lastActivity: Date.now(),
+      bookingIncomplete: false
     };
   }
 
   const session = memory[userId];
   const text = normalize(message);
+
+const inactive =
+  Date.now() - (session.lastActivity || 0) > 1000 * 60 * 30;
+
+session.lastActivity = Date.now();
+
+if (
+  inactive &&
+  session.bookingIncomplete &&
+  /(hi|hello|hey|hii)/i.test(text)
+) {
+  return reply(
+    session,
+
+    `👋 Welcome back!
+
+You were booking:
+
+💇 ${session.service}
+
+👉 Reply YES to continue
+👉 Type MENU to restart`,
+
+    `👋 Wapas aa gaye!
+
+💇 ${session.service}
+
+👉 YES likho continue ke liye
+👉 MENU likho restart ke liye`,
+
+    `👋 Welcome back!
+
+💇 ${session.service}
+
+👉 YES likho continue ke liye
+👉 MENU likho restart ke liye`
+  );
+}
+
+if (
+  session.bookingIncomplete &&
+  /(yes|haan|continue)/i.test(text)
+) {
+  session.step = "slot";
+
+  return `⏰ Available slots:
+
+${client.availableSlots.map(s => "• " + s).join("\n")}`;
+}
+
+if (/menu|restart|new/i.test(text)) {
+  session.step = "start";
+  session.service = null;
+  session.bookingIncomplete = false;
+
+  return "✨ Fresh start!\n\nType haircut / beard / facial";
+}
 
   // INTENT TRACKING
   if (text.includes("price")) session.intent = "medium";
@@ -495,6 +555,7 @@ function AI(userId, message, businessId) {
     session.service &&
     /(book|booking|confirm|kar|karna)/i.test(text)
   ) {
+    session.bookingIncomplete = true;
     session.step = "slot";
 
     return reply(
@@ -554,6 +615,9 @@ function AI(userId, message, businessId) {
     });
 
     session.awaitingPayment = true;
+
+    session.bookingIncomplete = false;
+    session.step = "done";
 
     notifyOwner(client, {
       service: session.service,

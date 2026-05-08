@@ -765,15 +765,21 @@ app.get("/webhook", (req, res) => {
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
   
+  console.log("🔍 Webhook verification attempt:", { token, challenge });
+  
   if (token === process.env.VERIFY_TOKEN) {
+    console.log("✅ Webhook verified!");
     return res.send(challenge);
   }
+  console.log("❌ Invalid verify token");
   res.sendStatus(403);
 });
+
 app.post("/webhook", async (req, res) => {
-  // Verify webhook signature
+  console.log("📨 Webhook received:", JSON.stringify(req.body, null, 2));
+  
   if (!verifyWebhookSignature(req)) {
-    console.warn("Invalid webhook signature");
+    console.warn("❌ Invalid webhook signature");
     return res.sendStatus(403);
   }
 
@@ -781,23 +787,31 @@ app.post("/webhook", async (req, res) => {
 
   try {
     const msg = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-
-    if (!msg) return;
+    
+    if (!msg) {
+      console.log("⚠️ No message found in webhook");
+      return;
+    }
 
     const from = msg.from;
     const text = msg.text?.body || "";
+    const phoneId = req.body.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
 
-    const phoneId =
-      req.body.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+    console.log("📱 Message from:", from);
+    console.log("📝 Text:", text);
+    console.log("📞 Phone ID:", phoneId);
+    console.log("🔍 Available phone IDs in clients:", Object.values(clients).map(c => c.phone_number_id));
 
     const businessId = Object.keys(clients).find(
       key => clients[key].phone_number_id === phoneId
     );
 
     if (!businessId) {
-  console.log("❌ No matching phone ID found. Phone ID:", phoneId);
-  return res.sendStatus(400);
-}
+      console.error("❌ No matching business found for phone ID:", phoneId);
+      return;
+    }
+
+    console.log("✅ Found business:", businessId);
 
     const client = clients[businessId];
 

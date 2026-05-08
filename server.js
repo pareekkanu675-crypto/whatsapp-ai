@@ -391,7 +391,7 @@ function AI(userId, message, businessId) {
       lang: null,
       service: null,
       intent: "low",
-      upsellOffered: false
+      upsellOffered: false,
 
       lastActivity: Date.now(),
       bookingIncomplete: false

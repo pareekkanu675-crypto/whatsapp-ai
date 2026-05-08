@@ -7,6 +7,7 @@ const QRCode = require("qrcode");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const path = require("path");
+const crypto = require("crypto");
 
 const app = express();
 app.use(express.json());
@@ -320,14 +321,25 @@ app.get("/api/dashboard-advanced", auth, (req, res) => {
 
 // ================= QR =================
 async function generateQRImage(upi, name, amount, service) {
-  const link = `upi://pay?pa=${upi}&pn=${name}&am=${amount}&tn=${service}&cu=INR`;
+  try {
+    // Ensure public directory exists
+    const publicDir = path.join(__dirname, "public");
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
 
-  const fileName = `qr_${Date.now()}.png`;
-  const filePath = path.join(__dirname, "public", fileName);
+    const link = `upi://pay?pa=${upi}&pn=${name}&am=${amount}&tn=${service}&cu=INR`;
+    const fileName = `qr_${Date.now()}.png`;
+    const filePath = path.join(publicDir, fileName);
 
-  await QRCode.toFile(filePath, link);
+    await QRCode.toFile(filePath, link);
 
-  return `${process.env.BASE_URL}/qr/${fileName}`;
+    const baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
+    return `${baseUrl}/qr/${fileName}`;
+  } catch (error) {
+    console.error("QR Generation Error:", error.message);
+    throw error;
+  }
 }
 
 // ================= OWNER NOTIFY =================
@@ -678,6 +690,20 @@ setInterval(async () => {
   saveAll();
 }, 60000);
 
+// ================= MEMORY CLEANUP =================
+setInterval(() => {
+  const now = Date.now();
+  const thirtyDaysAgo = 30 * 24 * 60 * 60 * 1000;
+
+  Object.keys(memory).forEach(userId => {
+    if (now - (memory[userId].lastActivity || 0) > thirtyDaysAgo) {
+      delete memory[userId];
+    }
+  });
+
+  console.log("💾 Memory cleanup completed");
+}, 24 * 60 * 60 * 1000); // Daily cleanup
+
 // ================= DISCOVERY ENGINE =================
 function buildWaLink(source, user) {
   const ref = `${source}_${Date.now()}`;
@@ -720,8 +746,28 @@ setInterval(async () => {
   }
 }, 60000);
 
+// ================= WEBHOOK VERIFICATION =================
+function verifyWebhookSignature(req) {
+  const signature = req.headers["x-hub-signature-256"];
+  if (!signature || !process.env.WHATSAPP_APP_SECRET) return true; // Skip if secret not configured
+
+  const body = JSON.stringify(req.body);
+  const hash = crypto
+    .createHmac("sha256", process.env.WHATSAPP_APP_SECRET)
+    .update(body)
+    .digest("hex");
+
+  return `sha256=${hash}` === signature;
+}
+
 // ================= WEBHOOK =================
 app.post("/webhook", async (req, res) => {
+  // Verify webhook signature
+  if (!verifyWebhookSignature(req)) {
+    console.warn("Invalid webhook signature");
+    return res.sendStatus(403);
+  }
+
   res.sendStatus(200);
 
   try {
@@ -785,49 +831,68 @@ app.post("/webhook", async (req, res) => {
 
     // PAYMENT
     if (text.toLowerCase() === "pay") {
-      const service = memory[from]?.service || "haircut";
+      try {
+        const service = memory[from]?.service || "haircut";
 
-      let amount = 0;
+        let amount = 0;
 
-      if (service.includes("haircut")) {
-        amount += client.services.haircut;
-      }
-
-      if (service.includes("beard")) {
-        amount += client.services.beard;
-      }
-
-      if (service.includes("facial")) {
-        amount += client.services.facial;
-      }
-
-      const qr = await generateQRImage(
-        client.upi,
-        client.name,
-        amount,
-        service
-      );
-
-      await axios.post(
-        `https://graph.facebook.com/v18.0/${phoneId}/messages`,
-        {
-          messaging_product: "whatsapp",
-          to: from,
-          type: "image",
-          image: {
-            link: qr,
-            caption:
-              `💳 Secure your slot\n\n` +
-              `💰 Amount: ₹${amount}\n\n` +
-              `👉 After payment type DONE`
-          }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`
-          }
+        if (service.includes("haircut")) {
+          amount += client.services.haircut;
         }
-      );
+
+        if (service.includes("beard")) {
+          amount += client.services.beard;
+        }
+
+        if (service.includes("facial")) {
+          amount += client.services.facial;
+        }
+
+        const qr = await generateQRImage(
+          client.upi,
+          client.name,
+          amount,
+          service
+        );
+
+        await axios.post(
+          `https://graph.facebook.com/v18.0/${phoneId}/messages`,
+          {
+            messaging_product: "whatsapp",
+            to: from,
+            type: "image",
+            image: {
+              link: qr,
+              caption:
+                `💳 Secure your slot\n\n` +
+                `💰 Amount: ₹${amount}\n\n` +
+                `👉 After payment type DONE`
+            }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`
+            }
+          }
+        );
+      } catch (e) {
+        console.error("Payment QR Error:", e.message);
+        await axios.post(
+          `https://graph.facebook.com/v18.0/${phoneId}/messages`,
+          {
+            messaging_product: "whatsapp",
+            to: from,
+            text: {
+              body: "❌ Failed to generate payment QR. Please try again."
+            }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`
+            }
+          }
+        );
+      }
     }
 
     // PAYMENT CONFIRM

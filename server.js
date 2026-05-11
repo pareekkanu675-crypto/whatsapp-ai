@@ -964,6 +964,6 @@ app.post("/webhook", async (req, res) => {
 });
 
 // ================= START =================
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log("🔥 ULTRA SERVER RUNNING", PORT);
 });

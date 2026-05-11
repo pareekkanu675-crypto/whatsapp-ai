@@ -958,7 +958,8 @@ app.post("/webhook", async (req, res) => {
 
     saveAll();
   } catch (e) {
-    console.log("ERROR:", e.message);
+    console.error("FULL ERROR");
+    console.error(e);
   }
 });
 
